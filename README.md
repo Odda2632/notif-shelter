@@ -51,7 +51,7 @@ miui-notif-shelter/
 │     ├─ ShelterReceiver.java          # 接收 SystemUI 的收纳/存活/报告广播
 │     └─ SettingsActivity.java         # 设置界面
 ├─ keystore/debug.keystore             # 仅供本地构建的调试签名
-└─ dist/notif-shelter-v0.2.0-debug.apk # 已构建好的产物
+└─ dist/notif-shelter-v0.2.1-debug.apk # 已构建好的产物
 ```
 
 ---
@@ -75,7 +75,7 @@ gradle assembleDebug
 ## 四、安装与启用
 
 ```bash
-adb install -r dist/notif-shelter-v0.2.0-debug.apk
+adb install -r dist/notif-shelter-v0.2.1-debug.apk
 ```
 
 1. **先打开一次应用**。首次启动会写入默认配置（`/data/data/com.notifshelter.miui/shared_prefs/config.xml`）——没有这个文件，SystemUI 侧读不到配置，模块会直接什么都不做。
@@ -83,13 +83,18 @@ adb install -r dist/notif-shelter-v0.2.0-debug.apk
 3. **作用域勾选「系统界面」（com.android.systemui）**。清单里已声明默认作用域，通常会自动勾上。
 4. 重启 SystemUI：LSPosed 管理器里对「系统界面」执行重启，或直接重启手机。
 
-验证模块挂上了：
+验证模块挂上了，两种看法——**手机上不需要电脑**：
 
-```bash
-adb logcat -s MIUI-Shelter
-```
+- **LSPosed 管理器 → 日志**，搜 `MIUI-Shelter`；
+- 或 `adb logcat -s MIUI-Shelter`。
 
-看到 `initZygote：模块已加载` 和 `命中 SystemUI 进程` 就对了。如果应用界面里「模块最近一次加载」有显示时间，说明存活广播也通了。
+看到 `initZygote：模块已加载`、`命中 SystemUI 进程`、`运行模式 = recon` 就对了。
+
+> 模块里的**生命周期节点**（模块加载 / 读到什么模式 / 探测是否排队 / 接收器是否注册 / 报告是否回传）
+> 都通过 `XLog.important()` 强制写进框架日志，所以 LSPosed 日志页里能看到这十来行。
+> 报告正文上千行，仍然只在 logcat 和报告文件里，不会刷 LSPosed 的日志。
+
+如果应用界面里「模块最近一次加载」有显示时间，说明存活广播也通了。
 
 ---
 
@@ -278,6 +283,8 @@ grep -nE "shouldHide|shouldShow|isUncommon|isSilent|isFold|isCollaps|shouldColla
 | 现象 | 原因 / 处理 |
 |---|---|
 | logcat 里连 `initZygote` 都没有 | LSPosed 没启用模块，或没重启 SystemUI。确认作用域勾了「系统界面」 |
+| 「模块最近一次加载」显示的模式是 `off`，但应用里选的是探测/收纳 | SystemUI 启动那一刻读到的还是旧模式。**模式只在 SystemUI 进程启动时读一次**，改完必须重启 SystemUI |
+| 想确认模块到底走到哪一步 | LSPosed 管理器 → 日志 → 搜 `MIUI-Shelter`。重点看 `运行模式 = ?`、`报告回传接收器已注册`、`探测已排队`、`已回传报告 N 个分片` 这四行，缺哪行就说明卡在哪一步 |
 | `读不到模块配置` | 没先打开一次应用。打开一次生成 `config.xml` 后重启 SystemUI |
 | 应用里「模块最近一次加载」一直是空 | 存活广播没到。确认模块已启用且 SystemUI 重启过；广播是 SystemUI 启动 6 秒后发的 |
 | `找不到类，hook 跳过: xxx` | 类名填错了，或 `cls` 是接口/抽象类。用探测报告里的**完整二进制类名**（点号分隔） |

@@ -31,7 +31,7 @@ public class ShelterModule implements IXposedHookLoadPackage, IXposedHookZygoteI
 
     @Override
     public void initZygote(StartupParam startupParam) {
-        XLog.i("initZygote：模块已加载，modulePath=" + startupParam.modulePath);
+        XLog.important("initZygote：模块已加载，modulePath=" + startupParam.modulePath);
     }
 
     @Override
@@ -40,7 +40,7 @@ public class ShelterModule implements IXposedHookLoadPackage, IXposedHookZygoteI
             if (!Keys.SYSTEMUI_PKG.equals(lpparam.packageName)) {
                 return;
             }
-            XLog.i("命中 SystemUI 进程: process=" + lpparam.processName
+            XLog.important("命中 SystemUI 进程: process=" + lpparam.processName
                     + " isFirstApplication=" + lpparam.isFirstApplication);
 
             Prefs prefs = new Prefs();
@@ -53,13 +53,14 @@ public class ShelterModule implements IXposedHookLoadPackage, IXposedHookZygoteI
             }
 
             String mode = prefs.mode();
-            XLog.i("运行模式 = " + mode);
+            // 这行是排查「改了模式没生效」的第一现场：它代表 SystemUI 启动那一刻读到的模式
+            XLog.important("运行模式 = " + mode);
 
             // 无论什么模式都回传一次存活广播，方便应用界面确认「模块确实挂上了」
             announceLater(mode);
 
             if (Keys.MODE_OFF.equals(mode)) {
-                XLog.i("模式为 off，不注入任何 hook。请在应用内选择「探测模式」或「收纳模式」。");
+                XLog.important("模式为 off，不注入任何 hook。请在应用内选择「探测模式」或「收纳模式」。");
                 return;
             }
 
@@ -95,7 +96,7 @@ public class ShelterModule implements IXposedHookLoadPackage, IXposedHookZygoteI
                     i.setPackage(Keys.PKG);
                     i.putExtra(Keys.EXTRA_MODE, mode);
                     ctx.sendBroadcast(i);
-                    XLog.i("已回传存活广播 (mode=" + mode + ")");
+                    XLog.important("已回传存活广播 (mode=" + mode + ")");
                 } catch (Throwable t) {
                     XLog.w("回传存活广播失败: " + XLog.describe(t));
                 }

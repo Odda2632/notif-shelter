@@ -44,7 +44,7 @@ public final class ReportBridge {
             } else {
                 sCtx.registerReceiver(sReceiver, filter);
             }
-            XLog.i("报告回传接收器已注册");
+            XLog.important("报告回传接收器已注册");
         } catch (Throwable t) {
             XLog.e("注册报告回传接收器失败", t);
         }
@@ -64,7 +64,7 @@ public final class ReportBridge {
                     XLog.w("收到报告请求但 token 校验失败，已忽略");
                     return;
                 }
-                XLog.i("收到报告请求，开始回传");
+                XLog.important("收到报告请求，开始回传");
                 push(context.getApplicationContext());
             } catch (Throwable t) {
                 XLog.e("处理报告请求失败", t);
@@ -88,7 +88,7 @@ public final class ReportBridge {
         sText = text;
         sPath = path;
         sTime = System.currentTimeMillis();
-        XLog.i("探测报告已缓存：" + (text == null ? 0 : text.length()) + " 字符，落盘=" + path);
+        XLog.important("探测报告已缓存：" + (text == null ? 0 : text.length()) + " 字符，落盘=" + path);
         push(sCtx);
     }
 
@@ -110,7 +110,7 @@ public final class ReportBridge {
             int to = Math.min(text.length(), from + CHUNK_CHARS);
             send(ctx, Keys.RECON_STATE_OK, total, i, text.substring(from, to), sTime);
         }
-        XLog.i("已回传报告 " + total + " 个分片（" + text.length() + " 字符）");
+        XLog.important("已回传报告 " + total + " 个分片（" + text.length() + " 字符）");
     }
 
     private static void send(Context ctx, String state, int total, int index,

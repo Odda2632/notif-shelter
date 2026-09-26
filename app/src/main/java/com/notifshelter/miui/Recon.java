@@ -58,7 +58,7 @@ public final class Recon {
                 }
             }
         }, METHOD_DUMP_DELAY_MS);
-        XLog.i("探测已排队，" + (METHOD_DUMP_DELAY_MS / 1000) + " 秒后开始");
+        XLog.important("探测已排队，" + (METHOD_DUMP_DELAY_MS / 1000) + " 秒后开始");
     }
 
     /** 执行探测，返回实际写入的报告文件（可能为 null，表示三处路径都写不进去）。 */
@@ -70,7 +70,7 @@ public final class Recon {
         }
 
         File report = openReport(ctx);
-        XLog.i("探测报告写入: " + (report == null ? "(仅内存与 logcat)" : report.getAbsolutePath()));
+        XLog.important("探测报告写入: " + (report == null ? "(仅内存与 logcat)" : report.getAbsolutePath()));
 
         XLog.i("=== 通知收纳 · SystemUI 探测报告 ===");
         XLog.i("Android SDK = " + android.os.Build.VERSION.SDK_INT
@@ -166,7 +166,7 @@ public final class Recon {
         }
 
         XLog.i("");
-        XLog.i("=== 报告结束，共 " + XLog.lineCount() + " 行 ===");
+        XLog.important("=== 报告结束，共 " + XLog.lineCount() + " 行 ===");
         return report;
     }
 

@@ -13,11 +13,14 @@ import de.robv.android.xposed.XposedBridge;
 /**
  * 统一日志出口。
  *
- * 同时写两处：
- *  1) logcat，tag = {@link #TAG}，方便 `adb logcat -s MIUI-Shelter` 直接看；
- *  2) 框架日志（XposedBridge.log），在 LSPosed 管理器的日志页可见。
+ * 同时写三处：
+ *  1) logcat，tag = {@link #TAG}，方便 `adb logcat -s MIUI-Shelter` 直接看（全部级别）；
+ *  2) 框架日志（XposedBridge.log），在 LSPosed 管理器的日志页可见
+ *     —— 只送 WARN 以上和 {@link #important(String)} 标记的生命周期节点，
+ *     因为报告正文有上千行，全送过去会把 LSPosed 日志刷爆；
+ *  3) 探测模式下的报告文件，文件名由 {@link #openReport(File)} 指定。
  *
- * 探测模式还会把完整报告写入文件，文件名由 {@link #openReport(File)} 指定。
+ * 探测期间还会额外留一份内存副本（{@link #beginCapture()}），落盘失败时靠它回传。
  */
 public final class XLog {
 
@@ -66,21 +69,32 @@ public final class XLog {
     }
 
     public static void i(String msg) {
-        out(Log.INFO, "I", msg);
+        out(Log.INFO, "I", msg, false);
+    }
+
+    /**
+     * 生命周期节点日志：级别仍是 INFO，但强制镜像进 XposedBridge.log，
+     * 于是会出现在 LSPosed 管理器的「日志」页里——手机上不用终端、不用 adb 就能自查。
+     *
+     * 只给「模块是否加载 / 读到什么模式 / 探测是否排队 / 接收器是否注册 / 报告是否回传」
+     * 这十来个节点用。报告正文绝不能走这里。
+     */
+    public static void important(String msg) {
+        out(Log.INFO, "I", msg, true);
     }
 
     public static void v(String msg) {
         if (sVerbose) {
-            out(Log.DEBUG, "V", msg);
+            out(Log.DEBUG, "V", msg, false);
         }
     }
 
     public static void w(String msg) {
-        out(Log.WARN, "W", msg);
+        out(Log.WARN, "W", msg, false);
     }
 
     public static void e(String msg, Throwable t) {
-        out(Log.ERROR, "E", msg + " -> " + describe(t));
+        out(Log.ERROR, "E", msg + " -> " + describe(t), false);
     }
 
     public static String describe(Throwable t) {
@@ -90,14 +104,14 @@ public final class XLog {
         return t.getClass().getName() + ": " + t.getMessage();
     }
 
-    private static void out(int priority, String level, String msg) {
+    private static void out(int priority, String level, String msg, boolean mirror) {
         sLines++;
         try {
             Log.println(priority, TAG, msg);
         } catch (Throwable ignored) {
             // 某些进程早期 Log 不可用
         }
-        if (priority >= Log.WARN) {
+        if (mirror || priority >= Log.WARN) {
             try {
                 XposedBridge.log(TAG + " [" + level + "] " + msg);
             } catch (Throwable ignored) {
