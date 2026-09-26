@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 铃铛主体 -->
+    <path
+        android:fillColor="#5B7CFA"
+        android:pathData="M54,22c-9.4,0 -17,7.6 -17,17v9.2l-5.4,9.2c-1.2,2 0.2,4.6 2.6,4.6h39.6c2.4,0 3.8,-2.6 2.6,-4.6L71,48.2V39C71,29.6 63.4,22 54,22z" />
+    <!-- 铃铛下沿 -->
+    <path
+        android:fillColor="#3F5BD8"
+        android:pathData="M44,66h20c0,5.5 -4.5,10 -10,10s-10,-4.5 -10,-10z" />
+    <!-- 向下收纳箭头 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M49,36h10v9h6l-11,12 -11,-12h6z" />
+</vector>

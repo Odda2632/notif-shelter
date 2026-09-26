@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 读取本机已安装应用信息：用于展示通知来源 App 名称 -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.NotifShelter">
+
+        <!-- ===== LSPosed 模块元数据 ===== -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="@string/xposed_description" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="93" />
+        <!-- 声明作用域，安装后 LSPosed 会默认只勾选 SystemUI -->
+        <meta-data
+            android:name="xposedscope"
+            android:resource="@array/xposed_scope" />
+        <!-- 让被 hook 的 SystemUI 进程能读到本应用的 SharedPreferences -->
+        <meta-data
+            android:name="xposedsharedprefs"
+            android:value="true" />
+
+        <!-- ===== 设置界面 ===== -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- ===== 读取本机当前通知列表（用于在应用内手动选择要收纳的通知） ===== -->
+        <service
+            android:name=".ShelterListenerService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- ===== 接收 SystemUI 侧长按菜单「收纳」点击的回传，落盘到 SharedPreferences ===== -->
+        <receiver
+            android:name=".ShelterReceiver"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="com.notifshelter.miui.action.TOGGLE_SHELVE" />
+                <action android:name="com.notifshelter.miui.action.CLEAR_SHELVE" />
+                <action android:name="com.notifshelter.miui.action.HELLO" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

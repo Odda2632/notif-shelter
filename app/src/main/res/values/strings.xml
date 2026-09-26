@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">通知收纳</string>
+    <string name="xposed_description">把任意通知手动收纳进「不常用通知」。适用于 HyperOS / MIUI：长按通知即可将其折叠到不常用区，也可在应用内批量选择。首次使用需运行「探测模式」以适配本机 SystemUI。</string>
+
+    <string name="status_unknown">未知</string>
+    <string name="notif_listener_hint">需要授予「通知使用权」才能在本应用内列出并选择通知。</string>
+</resources>
