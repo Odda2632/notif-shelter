@@ -23,9 +23,15 @@ public final class XLog {
 
     public static final String TAG = "MIUI-Shelter";
 
+    private static final Object CAPTURE_LOCK = new Object();
+
     private static volatile boolean sVerbose = true;
     private static volatile int sLines;
     private static BufferedWriter sReport;
+
+    /** 探测期间的内存副本，落盘全部失败时靠它回传。 */
+    private static volatile boolean sCapturing;
+    private static final StringBuilder sCapture = new StringBuilder();
 
     private XLog() {
     }
@@ -33,6 +39,26 @@ public final class XLog {
     /** 已输出的日志行数，用于报告结尾统计。 */
     public static int lineCount() {
         return sLines;
+    }
+
+    /**
+     * 开始捕获报告正文。
+     * 注意：不能只看「文件是否打开成功」——三处路径可能全写不进去，
+     * 那种情况下内存副本是唯一的获取途径。
+     */
+    public static void beginCapture() {
+        synchronized (CAPTURE_LOCK) {
+            sCapture.setLength(0);
+            sCapturing = true;
+        }
+    }
+
+    /** 结束捕获并返回正文。 */
+    public static String endCapture() {
+        synchronized (CAPTURE_LOCK) {
+            sCapturing = false;
+            return sCapture.toString();
+        }
     }
 
     public static void setVerbose(boolean verbose) {
@@ -87,6 +113,11 @@ public final class XLog {
                 w.write('\n');
             } catch (Throwable ignored) {
                 // 报告写失败不影响主流程
+            }
+        }
+        if (sCapturing) {
+            synchronized (CAPTURE_LOCK) {
+                sCapture.append(level).append(' ').append(msg).append('\n');
             }
         }
     }

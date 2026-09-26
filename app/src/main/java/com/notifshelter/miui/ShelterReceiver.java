@@ -34,6 +34,14 @@ public class ShelterReceiver extends BroadcastReceiver {
                         .putString(Keys.LAST_SEEN_MODE, intent.getStringExtra(Keys.EXTRA_MODE))
                         .apply();
                 XLog.i("收到 SystemUI 存活广播，模式=" + intent.getStringExtra(Keys.EXTRA_MODE));
+            } else if (Keys.ACTION_RECON_REPORT.equals(action)) {
+                ReconReport.accept(context,
+                        intent.getStringExtra(Keys.EXTRA_RECON_STATE),
+                        intent.getIntExtra(Keys.EXTRA_RECON_TOTAL, 0),
+                        intent.getIntExtra(Keys.EXTRA_RECON_INDEX, 0),
+                        intent.getStringExtra(Keys.EXTRA_RECON_TEXT),
+                        intent.getLongExtra(Keys.EXTRA_RECON_TIME, 0),
+                        intent.getStringExtra(Keys.EXTRA_RECON_PATH));
             }
         } catch (Throwable t) {
             XLog.e("处理收纳广播失败", t);

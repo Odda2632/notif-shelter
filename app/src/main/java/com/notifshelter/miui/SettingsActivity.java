@@ -4,15 +4,18 @@ import android.app.Activity;
 import android.app.Notification;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.MediaStore;
 import android.service.notification.StatusBarNotification;
 import android.text.InputType;
 import android.util.TypedValue;
@@ -28,6 +31,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -37,9 +42,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /** 模块设置界面：模式切换、通知选择、类名探测、hook 配置。 */
-public class SettingsActivity extends Activity {
+public class SettingsActivity extends Activity implements ReconReport.Listener {
 
     private static final int DISPLAY_MAX_LINES = 800;
     private static final int RECON_TARGET_LIMIT = 60;
@@ -51,6 +57,8 @@ public class SettingsActivity extends Activity {
     private TextView notifStatusView;
     private LinearLayout notifList;
     private TextView scanView;
+    private TextView reportStatusView;
+    private TextView reportView;
     private EditText editBool;
     private EditText editField;
     private EditText editMenu;
@@ -63,14 +71,17 @@ public class SettingsActivity extends Activity {
         super.onCreate(savedInstanceState);
         sp = getSharedPreferences(Keys.PREF_FILE, Context.MODE_PRIVATE);
         ensureDefaults();
+        ensureToken();
         setContentView(buildUi());
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        ReconReport.addListener(this);
         ShelterListenerService.tryRebind(this);
         refreshStatus();
+        refreshReport();
         // 监听服务重连需要一点时间，稍后再刷一次
         new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
             @Override
@@ -79,6 +90,22 @@ public class SettingsActivity extends Activity {
             }
         }, 800);
         refreshNotifications();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        ReconReport.removeListener(this);
+    }
+
+    @Override
+    public void onReportChanged() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                refreshReport();
+            }
+        });
     }
 
     // ==================== 默认配置 ====================
@@ -97,6 +124,18 @@ public class SettingsActivity extends Activity {
                 .putString(Keys.HOOK_FIELD, "[]")
                 .putString(Keys.HOOK_MENU, "[]")
                 .apply();
+    }
+
+    /**
+     * 生成报告请求的校验 token。
+     * 独立于 {@link #ensureDefaults()}——后者在老用户升级时因为 MODE 已存在会直接返回，
+     * 那样就拿不到 token，报告拉不下来。
+     */
+    private void ensureToken() {
+        if (sp.contains(Keys.RECON_TOKEN)) {
+            return;
+        }
+        sp.edit().putString(Keys.RECON_TOKEN, UUID.randomUUID().toString()).apply();
     }
 
     // ==================== 界面搭建 ====================
@@ -236,16 +275,52 @@ public class SettingsActivity extends Activity {
             }
         }));
 
-        // ---------- 7 报告位置 ----------
-        root.addView(section("7. 探测报告在哪里"));
-        TextView paths = text("SystemUI 侧生成的报告会按顺序尝试写到：\n"
-                + "  /data/local/tmp/miui_shelter/recon.txt\n"
-                + "  /sdcard/Android/data/com.android.systemui/files/recon.txt\n\n"
-                + "命令：\n"
-                + "  adb logcat -s MIUI-Shelter\n"
-                + "  adb pull /data/local/tmp/miui_shelter/recon.txt", 12, false);
-        paths.setTypeface(Typeface.MONOSPACE);
-        root.addView(paths);
+        // ---------- 7 探测报告 ----------
+        root.addView(section("7. 探测报告（系统界面 → 应用）"));
+        root.addView(text("报告由系统界面通过广播回传到这里，不用再去翻文件。顺序：先在上面"
+                + "「把候选类写入 recon_targets」→ 选「探测模式」→ 重启系统界面 → 等 12 秒 → 点「拉取报告」。", 12, false));
+        reportStatusView = text("", 13, false);
+        root.addView(reportStatusView);
+
+        LinearLayout reportActions = new LinearLayout(this);
+        reportActions.setOrientation(LinearLayout.HORIZONTAL);
+        reportActions.addView(button("拉取报告", new Runnable() {
+            @Override
+            public void run() {
+                requestReport();
+            }
+        }));
+        reportActions.addView(button("复制", new Runnable() {
+            @Override
+            public void run() {
+                copyReport();
+            }
+        }));
+        root.addView(reportActions);
+
+        LinearLayout reportActions2 = new LinearLayout(this);
+        reportActions2.setOrientation(LinearLayout.HORIZONTAL);
+        reportActions2.addView(button("保存到 Download", new Runnable() {
+            @Override
+            public void run() {
+                saveReportToDownload();
+            }
+        }));
+        reportActions2.addView(button("分享", new Runnable() {
+            @Override
+            public void run() {
+                shareReport();
+            }
+        }));
+        root.addView(reportActions2);
+
+        reportView = text("", 11, false);
+        reportView.setTypeface(Typeface.MONOSPACE);
+        root.addView(reportView);
+
+        root.addView(text("「拉取报告」依赖系统界面里的模块已经跑过一次探测。如果它回"
+                + "「还没有报告」，说明模式没切到探测模式、或系统界面没重启过——"
+                + "改模式必须重启系统界面才生效。", 11, false));
 
         ScrollView sv = new ScrollView(this);
         sv.addView(root);
@@ -419,7 +494,7 @@ public class SettingsActivity extends Activity {
                     @Override
                     public void run() {
                         scannedFullText = result;
-                        scanView.setText(truncate(result));
+                        scanView.setText(truncate(result, "点「复制完整结果」拿全量"));
                     }
                 });
             }
@@ -472,7 +547,7 @@ public class SettingsActivity extends Activity {
         return sb.toString();
     }
 
-    private String truncate(String s) {
+    private String truncate(String s, String hint) {
         String[] lines = s.split("\n");
         if (lines.length <= DISPLAY_MAX_LINES) {
             return s;
@@ -483,8 +558,118 @@ public class SettingsActivity extends Activity {
         }
         sb.append("\n…（界面仅显示前 ").append(DISPLAY_MAX_LINES)
                 .append(" 行，共 ").append(lines.length)
-                .append(" 行。点「复制完整结果」拿全量）");
+                .append(" 行。").append(hint).append("）");
         return sb.toString();
+    }
+
+    // ==================== 探测报告 ====================
+
+    /** 刷新报告区：状态行 + 正文。 */
+    private void refreshReport() {
+        String text = ReconReport.text(this);
+        StringBuilder sb = new StringBuilder();
+        if (text.isEmpty()) {
+            sb.append("报告：尚未收到。\n");
+        } else {
+            long t = sp.getLong(Keys.LAST_RECON_TIME, 0);
+            String path = sp.getString(Keys.LAST_RECON_PATH, "-");
+            sb.append("报告：").append(ReconReport.describe(text)).append('\n');
+            sb.append("生成于：")
+                    .append(t > 0
+                            ? new SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(new Date(t))
+                            : "未知（可能是重启系统界面前收到的）")
+                    .append('\n');
+            sb.append("系统界面侧落盘：").append(path).append('\n');
+        }
+        String status = ReconReport.status();
+        if (status != null && !status.isEmpty()) {
+            sb.append(status).append('\n');
+        }
+        reportStatusView.setText(sb.toString());
+        reportView.setText(text.isEmpty() ? "" : truncate(text, "点「复制」或「保存到 Download」拿全量"));
+    }
+
+    /** 向系统界面请求最近一次探测报告。 */
+    private void requestReport() {
+        String token = sp.getString(Keys.RECON_TOKEN, "");
+        if (token.isEmpty()) {
+            toast("缺少校验 token，请退出应用重新打开一次");
+            return;
+        }
+        try {
+            Intent i = new Intent(Keys.ACTION_RECON_REQUEST);
+            i.setPackage(Keys.SYSTEMUI_PKG);
+            i.putExtra(Keys.EXTRA_TOKEN, token);
+            sendBroadcast(i);
+            ReconReport.markRequested();
+            toast("已请求，等系统界面回传");
+        } catch (Throwable t) {
+            toast("请求失败：" + XLog.describe(t));
+        }
+    }
+
+    private void copyReport() {
+        String text = ReconReport.text(this);
+        if (text.isEmpty()) {
+            toast("还没有报告可复制");
+            return;
+        }
+        copyToClipboard(text);
+    }
+
+    private void saveReportToDownload() {
+        String text = ReconReport.text(this);
+        if (text.isEmpty()) {
+            toast("还没有报告可保存");
+            return;
+        }
+        try {
+            exportReportToDownload(text);
+            toast("已保存到 Download/miui_shelter_recon.txt");
+        } catch (Throwable t) {
+            toast("保存失败：" + XLog.describe(t));
+        }
+    }
+
+    private void shareReport() {
+        String text = ReconReport.text(this);
+        if (text.isEmpty()) {
+            toast("还没有报告可分享");
+            return;
+        }
+        try {
+            Uri uri = exportReportToDownload(text);
+            Intent i = new Intent(Intent.ACTION_SEND);
+            i.setType("text/plain");
+            i.putExtra(Intent.EXTRA_STREAM, uri);
+            i.putExtra(Intent.EXTRA_SUBJECT, "miui_shelter_recon.txt");
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(i, "分享探测报告"));
+        } catch (Throwable t) {
+            toast("分享失败：" + XLog.describe(t));
+        }
+    }
+
+    /**
+     * 把报告写成 Download 下的一个文本文件，返回它的 content URI。
+     * 走 MediaStore 而不是直接写 /sdcard：Android 10+ 分区存储下，
+     * 应用对 Download 目录只能通过 MediaStore 写，其它方式要么没权限要么会被拦。
+     */
+    private Uri exportReportToDownload(String text) throws Exception {
+        ContentValues v = new ContentValues();
+        v.put(MediaStore.Downloads.DISPLAY_NAME, "miui_shelter_recon.txt");
+        v.put(MediaStore.Downloads.MIME_TYPE, "text/plain");
+        Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+        if (uri == null) {
+            throw new IllegalStateException("MediaStore 未返回 URI");
+        }
+        try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+            if (os == null) {
+                throw new IllegalStateException("无法打开输出流");
+            }
+            os.write(text.getBytes(StandardCharsets.UTF_8));
+        }
+        return uri;
     }
 
     private void writeReconTargets() {

@@ -61,6 +61,7 @@
                 <action android:name="com.notifshelter.miui.action.TOGGLE_SHELVE" />
                 <action android:name="com.notifshelter.miui.action.CLEAR_SHELVE" />
                 <action android:name="com.notifshelter.miui.action.HELLO" />
+                <action android:name="com.notifshelter.miui.action.RECON_REPORT" />
             </intent-filter>
         </receiver>
 

@@ -34,27 +34,43 @@ public final class Recon {
         new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
             @Override
             public void run() {
+                File report = null;
+                String text;
                 try {
-                    Recon.run(cl, prefs);
+                    // 先开捕获：三处落盘路径可能全写不进去，内存副本是兜底
+                    XLog.beginCapture();
+                    report = Recon.run(cl, prefs);
                 } catch (Throwable t) {
                     XLog.e("探测执行失败", t);
                 } finally {
                     XLog.closeReport();
+                    text = XLog.endCapture();
+                }
+                try {
+                    Context ctx = currentContext();
+                    if (ctx == null) {
+                        XLog.w("拿不到 SystemUI Context，报告无法回传给应用");
+                        return;
+                    }
+                    ReportBridge.publish(ctx, text, report == null ? "-" : report.getAbsolutePath());
+                } catch (Throwable t) {
+                    XLog.e("回传探测报告失败", t);
                 }
             }
         }, METHOD_DUMP_DELAY_MS);
         XLog.i("探测已排队，" + (METHOD_DUMP_DELAY_MS / 1000) + " 秒后开始");
     }
 
-    public static void run(ClassLoader cl, Prefs prefs) {
+    /** 执行探测，返回实际写入的报告文件（可能为 null，表示三处路径都写不进去）。 */
+    public static File run(ClassLoader cl, Prefs prefs) {
         Context ctx = currentContext();
         if (ctx == null) {
             XLog.e("拿不到 SystemUI Context，探测中止", new IllegalStateException("no context"));
-            return;
+            return null;
         }
 
         File report = openReport(ctx);
-        XLog.i("探测报告写入: " + (report == null ? "(仅 logcat)" : report.getAbsolutePath()));
+        XLog.i("探测报告写入: " + (report == null ? "(仅内存与 logcat)" : report.getAbsolutePath()));
 
         XLog.i("=== 通知收纳 · SystemUI 探测报告 ===");
         XLog.i("Android SDK = " + android.os.Build.VERSION.SDK_INT
@@ -151,6 +167,7 @@ public final class Recon {
 
         XLog.i("");
         XLog.i("=== 报告结束，共 " + XLog.lineCount() + " 行 ===");
+        return report;
     }
 
     private static Context currentContext() {

@@ -89,6 +89,8 @@ public class ShelterModule implements IXposedHookLoadPackage, IXposedHookZygoteI
                         XLog.w("存活广播延期失败：拿不到 Context");
                         return;
                     }
+                    // 注册报告回传接收器，让应用随时能拉取最近一次探测报告
+                    ReportBridge.install(ctx);
                     Intent i = new Intent(Keys.ACTION_HELLO);
                     i.setPackage(Keys.PKG);
                     i.putExtra(Keys.EXTRA_MODE, mode);

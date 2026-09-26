@@ -47,6 +47,31 @@ public final class Keys {
     public static final String EXTRA_VALUE = "value";
     public static final String EXTRA_MODE = "mode";
 
+    // ---- 探测报告回传（SystemUI → 应用）----
+    /** 应用 → SystemUI：请求把最近一次探测报告回传。 */
+    public static final String ACTION_RECON_REQUEST = "com.notifshelter.miui.action.RECON_REQUEST";
+    /** SystemUI → 应用：探测报告的一个分片（或一条状态说明）。 */
+    public static final String ACTION_RECON_REPORT = "com.notifshelter.miui.action.RECON_REPORT";
+    /**
+     * 报告请求的校验 token。SystemUI 侧的接收器是 exported 的，
+     * 必须校验 token，否则设备上任意应用都能拉走 SystemUI 的内部类名。
+     * 首次打开应用时生成，SystemUI 侧通过 XSharedPreferences 读取。
+     */
+    public static final String RECON_TOKEN = "recon_token";
+    public static final String EXTRA_TOKEN = "token";
+    public static final String EXTRA_RECON_STATE = "recon_state";
+    public static final String EXTRA_RECON_TOTAL = "recon_total";
+    public static final String EXTRA_RECON_INDEX = "recon_index";
+    public static final String EXTRA_RECON_TEXT = "recon_text";
+    public static final String EXTRA_RECON_TIME = "recon_time";
+    public static final String EXTRA_RECON_PATH = "recon_path";
+    /** 有报告，随后是 total 个分片。 */
+    public static final String RECON_STATE_OK = "ok";
+    /** 探测还没跑完（SystemUI 刚重启，12 秒延迟还没到）。 */
+    public static final String RECON_STATE_PENDING = "pending";
+    /** SystemUI 内存里没有报告。 */
+    public static final String RECON_STATE_NONE = "none";
+
     // ---- 模块存活记录（由应用侧在收到 ACTION_HELLO 时写入）----
     public static final String LAST_SEEN = "module_last_seen";
     public static final String LAST_SEEN_MODE = "module_last_seen_mode";

@@ -41,15 +41,17 @@ miui-notif-shelter/
 │     ├─ DexScanner.java               # 纯字节扫 DEX 枚举类名（无隐藏 API）
 │     ├─ ClassCatalog.java             # 关键词分组 + 方法签名格式化
 │     ├─ Recon.java                    # SystemUI 侧探测 & 报告输出
+│     ├─ ReportBridge.java             # SystemUI 侧：把报告分片广播回传给应用
+│     ├─ ReconReport.java              # 应用侧：重组分片、落盘、通知界面刷新
 │     ├─ HookEngine.java               # 配置驱动的三种 hook 策略
 │     ├─ Prefs.java                    # SystemUI 侧跨进程读配置
 │     ├─ ShelterPopup.java             # 长按后弹出的收纳菜单
 │     ├─ ShelvedKeys.java              # 收纳状态唯一写入方 + 广播同步
 │     ├─ ShelterListenerService.java   # 拿当前通知列表（应用侧）
-│     ├─ ShelterReceiver.java          # 接收 SystemUI 的收纳/存活广播
+│     ├─ ShelterReceiver.java          # 接收 SystemUI 的收纳/存活/报告广播
 │     └─ SettingsActivity.java         # 设置界面
 ├─ keystore/debug.keystore             # 仅供本地构建的调试签名
-└─ dist/notif-shelter-v0.1.0-debug.apk # 已构建好的产物
+└─ dist/notif-shelter-v0.2.0-debug.apk # 已构建好的产物
 ```
 
 ---
@@ -73,7 +75,7 @@ gradle assembleDebug
 ## 四、安装与启用
 
 ```bash
-adb install -r dist/notif-shelter-v0.1.0-debug.apk
+adb install -r dist/notif-shelter-v0.2.0-debug.apk
 ```
 
 1. **先打开一次应用**。首次启动会写入默认配置（`/data/data/com.notifshelter.miui/shared_prefs/config.xml`）——没有这个文件，SystemUI 侧读不到配置，模块会直接什么都不做。
@@ -110,35 +112,45 @@ adb logcat -s MIUI-Shelter
 | ⑤ 长按菜单 / 手势 | `MenuRow` `LongClick` `Guts` |
 | ⑥ MIUI 定制类 | 名字带 `miui` 的 |
 
-### Step 2 · dump 方法签名
+### Step 2 · dump 方法签名 → 在应用里直接看报告
 
-切到 **「探测模式」**（第 2 节里选），重启 SystemUI。探测会在 12 秒后自动跑，并把**组① 的前 60 个类**的方法签名全部 dump 出来。
+切到 **「探测模式」**（第 2 节里选），**重启 SystemUI**。探测会在 12 秒后自动跑，把**组① 的前 60 个类**的方法签名全部 dump 出来。
 
 想 dump 指定的类：先在应用里点 **「把候选类写入 recon_targets」**（写入组① 前 60 个），或直接改 `recon_targets`。
 
-抓日志：
+**取报告不用碰电脑、也不用翻目录**：等 12 秒后打开应用，第 7 节 **「探测报告」** 里就会显示正文和状态；点 **「拉取报告」** 可以再要一次（探测完成后 SystemUI 自己也会主动推一次）。
+
+> 原理：报告由 SystemUI 侧分片广播回传（`ReportBridge` → `ReconReport`），走的是内存副本，
+> 所以哪怕文件三处路径全写不进去也拿得到。报告会存在应用私有目录，退出重进还在。
+
+要在手机上发给别人：点 **「保存到 Download」**（落在 `Download/miui_shelter_recon.txt`）或 **「分享」**。
+
+<details>
+<summary>备选：adb 抓日志（有电脑时）</summary>
 
 ```bash
 adb logcat -c
 adb logcat -s MIUI-Shelter > recon.log        # 重启 SystemUI 后跑一会儿，Ctrl-C
-# 报告文件也可以直接拉：
+# 报告文件也可以直接拉（注意 uid 1000 写不进 /data/local/tmp，实际落点看 logcat 里的提示）
 adb pull /data/local/tmp/miui_shelter/recon.txt
 ```
 
-> 报告文件会按顺序尝试写三处：`/data/local/tmp/miui_shelter/recon.txt` → SystemUI 的外部目录 `recon.txt` → SystemUI 私有目录。logcat 里会打印实际落点。
+报告会按顺序尝试写三处：`/data/local/tmp/miui_shelter/recon.txt` → SystemUI 的外部目录 `recon.txt` → SystemUI 私有目录。
+前一处对 SystemUI 来说不可写（它是 uid 1000，而 `/data/local/tmp` 是 `shell:shell 0771`），通常会落到后两处；logcat 里会打印实际落点。
+</details>
 
 ### Step 3 · 判断哪个方法是「收纳判定」
 
-只看组① 的段：
+报告存成文件后（「保存到 Download」）在电脑上过滤，或直接在应用界面里往下翻：
 
 ```bash
-awk '/--- ① /{f=1} /--- ② /{f=0} f' recon.log
+awk '/--- ① /{f=1} /--- ② /{f=0} f' recon.txt
 ```
 
 然后在方法签名里搜判定型名字：
 
 ```bash
-grep -nE "shouldHide|shouldShow|isUncommon|isSilent|isFold|isCollaps|shouldCollaps|isMinimi|getSection|getBundle" recon.log
+grep -nE "shouldHide|shouldShow|isUncommon|isSilent|isFold|isCollaps|shouldCollaps|isMinimi|getSection|getBundle" recon.txt
 ```
 
 **一个方法要满足这四条，才是我们要的判定点：**
@@ -273,6 +285,9 @@ grep -nE "shouldHide|shouldShow|isUncommon|isSilent|isFold|isCollaps|shouldColla
 | hook 都成功了但状态栏没变化 | 说明这个判定点不是真正的渲染入口。回到 Step 3，换一个候选；重点找**栈布局阶段**调用的方法 |
 | 收纳后在应用里看得到、状态栏不折叠 | 大概率是第七节说的框架侧实现，或者需要**重新打开通知栏**才重绘（hook 只在布局时生效） |
 | 改完配置没反应 | hook 结构只在 SystemUI 进程启动时注入一次。改 `hook_bool`/`hook_field`/`hook_entry` 后必须重启 SystemUI；**已收纳列表是实时生效的**，不用重启 |
+| 点「拉取报告」回「还没有报告」 | SystemUI 内存里确实没有：模式没切到「探测模式」，或改完模式没重启 SystemUI，或 12 秒还没到 |
+| 点「拉取报告」一直是「正在接收分片 x / y」 | 应用进程在中途被杀了，分片没凑齐。再点一次「拉取报告」即可（SystemUI 会重发全部） |
+| 模块从 0.1.0 升到 0.2.0 后拉不到报告 | 老版本没有 `recon_token`。打开一次应用会自动补上，然后再重启 SystemUI |
 
 清空所有收纳记录：
 
@@ -295,7 +310,7 @@ adb shell am broadcast -a com.notifshelter.miui.action.CLEAR_SHELVE -p com.notif
 
 ## 十、下一步
 
-把探测报告（`recon.log` 或 `recon.txt`）里有价值的两段发我：
+把探测报告（应用里「保存到 Download」出来的 `miui_shelter_recon.txt`）里有价值的两段发我：
 
 1. **组① 的完整类名列表**
 2. **你觉得可疑的类的方法签名**（比如所有名字带 `uncommon`/`fold`/`section` 的类）
